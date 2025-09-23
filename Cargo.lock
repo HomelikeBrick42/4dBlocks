@@ -459,12 +459,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa9a19cbb55df58761df49b23516a86d432839add4af60fc256da840f66ed35b"
 
 [[package]]
+name = "ga_generator"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "540bc75851c530b4dc3ee05e748321c66a1123b3515e7db33029629781acbc82"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "game"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
  "cgmath",
+ "math",
  "pollster",
+ "serde",
  "slotmap",
  "wgpu",
  "winit",
@@ -756,6 +769,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62bb907fe88d54d8d9ce32a3cceab4218ed2f6b7d35617cafe9adf84e43919cb"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "math"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "cgmath",
+ "ga_generator",
+ "serde",
 ]
 
 [[package]]

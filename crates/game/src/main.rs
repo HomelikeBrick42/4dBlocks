@@ -3,16 +3,28 @@ pub mod ui;
 
 use crate::state::State;
 use std::{
+    collections::HashSet,
     sync::Arc,
     time::{Duration, Instant},
 };
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{StartCause, WindowEvent},
+    event::{ElementState, MouseButton, StartCause, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::{Window, WindowAttributes, WindowId},
 };
+
+pub struct Input {
+    pub mouse_position: cgmath::Vector2<f32>,
+    mouse_buttons: HashSet<MouseButton>,
+}
+
+impl Input {
+    pub fn mouse_button_pressed(&self, mouse_button: MouseButton) -> bool {
+        self.mouse_buttons.contains(&mouse_button)
+    }
+}
 
 fn main() -> Result<(), winit::error::EventLoopError> {
     struct WindowState {
@@ -30,6 +42,7 @@ fn main() -> Result<(), winit::error::EventLoopError> {
         queue: wgpu::Queue,
 
         state: State,
+        input: Input,
         window_state: Option<WindowState>,
     }
 
@@ -117,6 +130,35 @@ fn main() -> Result<(), winit::error::EventLoopError> {
                         .surface_resized(surface_config.width, surface_config.height);
 
                     self.render();
+                }
+
+                WindowEvent::MouseInput {
+                    device_id: _,
+                    state,
+                    button,
+                } => match state {
+                    ElementState::Pressed => _ = self.input.mouse_buttons.insert(button),
+                    ElementState::Released => _ = self.input.mouse_buttons.remove(&button),
+                },
+
+                WindowEvent::CursorMoved {
+                    device_id: _,
+                    position,
+                } => {
+                    let size = window.inner_size();
+                    let aspect = size.width as f32 / size.height as f32;
+
+                    let old_position = self.input.mouse_position;
+                    let mut position = cgmath::vec2(
+                        position.x as f32 / size.width as f32,
+                        position.y as f32 / size.height as f32,
+                    );
+                    position = position * 2.0 - cgmath::vec2(1.0, 1.0);
+                    position.x *= aspect;
+                    position.y *= -1.0;
+                    self.input.mouse_position = position;
+
+                    self.state.mouse_moved(&self.input, old_position);
                 }
 
                 _ => {}
@@ -258,6 +300,10 @@ fn main() -> Result<(), winit::error::EventLoopError> {
         queue,
 
         state,
+        input: Input {
+            mouse_position: cgmath::vec2(0.0, 0.0),
+            mouse_buttons: HashSet::new(),
+        },
         window_state: None,
     };
 
