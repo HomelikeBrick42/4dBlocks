@@ -141,7 +141,7 @@ impl State {
                     a: compass_position,
                     b: end_position,
                     color,
-                    width: 0.01,
+                    width: 0.05,
                 });
 
                 let text_size = 0.02;
