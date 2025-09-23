@@ -247,7 +247,7 @@ fn main() -> Result<(), winit::error::EventLoopError> {
         (device, queue)
     });
 
-    let state = State::new(&device);
+    let state = State::new(&device, &queue);
 
     let mut app = App {
         last_time: None,

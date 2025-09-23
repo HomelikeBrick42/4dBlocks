@@ -8,12 +8,12 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
         Self {
             surface_width: 0,
             surface_height: 0,
 
-            ui: Ui::new(device),
+            ui: Ui::new(device, queue),
         }
     }
 
@@ -33,27 +33,39 @@ impl State {
         let aspect = self.surface_width as f32 / self.surface_height as f32;
 
         self.ui.clear();
-        self.ui.push_quad(Quad {
-            position: cgmath::vec2(0.0, 0.0),
-            size: cgmath::vec2(2.0 * aspect, 2.0),
-            color: cgmath::vec4(0.0, 0.0, 0.0, 1.0),
-        });
-        self.ui.push_line(Line {
-            a: cgmath::vec2(-1.0, -1.0),
-            b: cgmath::vec2(1.0, 1.0),
-            color: cgmath::vec4(1.0, 0.0, 0.0, 1.0),
-            width: 0.1,
-        });
-        self.ui.push_ellipse(Ellipse {
-            position: cgmath::vec2(0.5, 0.0),
-            size: cgmath::vec2(1.0, 0.5),
-            color: cgmath::vec4(0.0, 0.0, 1.0, 1.0),
-        });
-        self.ui.push_quad(Quad {
-            position: cgmath::vec2(0.0, 0.0),
-            size: cgmath::vec2(1.0, 1.0),
-            color: cgmath::vec4(0.0, 1.0, 0.0, 0.5),
-        });
+        self.ui.push_quad(
+            Quad {
+                position: cgmath::vec2(0.0, 0.0),
+                size: cgmath::vec2(2.0 * aspect, 2.0),
+                color: cgmath::vec4(0.0, 0.0, 0.0, 1.0),
+            },
+            None,
+        );
+        self.ui.push_line(
+            Line {
+                a: cgmath::vec2(-1.0, -1.0),
+                b: cgmath::vec2(1.0, 1.0),
+                color: cgmath::vec4(1.0, 0.0, 0.0, 1.0),
+                width: 0.1,
+            },
+            None,
+        );
+        self.ui.push_ellipse(
+            Ellipse {
+                position: cgmath::vec2(0.5, 0.0),
+                size: cgmath::vec2(1.0, 0.5),
+                color: cgmath::vec4(0.0, 0.0, 1.0, 1.0),
+            },
+            None,
+        );
+        self.ui.push_quad(
+            Quad {
+                position: cgmath::vec2(0.0, 0.0),
+                size: cgmath::vec2(1.0, 1.0),
+                color: cgmath::vec4(0.0, 1.0, 0.0, 0.5),
+            },
+            None,
+        );
 
         move |render_pass: &mut wgpu::RenderPass<'_>| {
             self.ui.render(

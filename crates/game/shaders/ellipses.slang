@@ -51,6 +51,11 @@ struct FragmentOutput
     float4 color : SV_Target;
 }
 
+[vk::binding(0, 2)]
+Texture2D texture;
+[vk::binding(1, 2)]
+SamplerState textureSampler;
+
 [shader("fragment")]
 FragmentOutput fragment(VertexOutput in)
 {
@@ -61,7 +66,7 @@ FragmentOutput fragment(VertexOutput in)
     var out : FragmentOutput;
 
     let ellpise = ellpises[in.instance_id];
-    out.color = float4(ellpise.r, ellpise.g, ellpise.b, ellpise.a);
+    out.color = float4(ellpise.r, ellpise.g, ellpise.b, ellpise.a) * texture.Sample(textureSampler, in.uv);
 
     return out;
 }

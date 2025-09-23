@@ -1,9 +1,31 @@
+pub mod texture;
+
+use crate::{state::render_pipeline, ui::texture::Texture};
+use bytemuck::{Pod, Zeroable};
 use std::num::NonZeroU64;
 
-use crate::state::render_pipeline;
-use bytemuck::{Pod, Zeroable};
+pub struct Line {
+    pub a: cgmath::Vector2<f32>,
+    pub b: cgmath::Vector2<f32>,
+    pub color: cgmath::Vector4<f32>,
+    pub width: f32,
+}
+
+pub struct Quad {
+    pub position: cgmath::Vector2<f32>,
+    pub size: cgmath::Vector2<f32>,
+    pub color: cgmath::Vector4<f32>,
+}
+
+pub struct Ellipse {
+    pub position: cgmath::Vector2<f32>,
+    pub size: cgmath::Vector2<f32>,
+    pub color: cgmath::Vector4<f32>,
+}
 
 pub struct Ui {
+    white_pixel_texture: Texture,
+
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
@@ -23,7 +45,29 @@ pub struct Ui {
 }
 
 impl Ui {
-    pub fn new(device: &wgpu::Device) -> Self {
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+        let texture_bind_group_layout = texture::bind_group_layout(device);
+        let white_pixel_texture = Texture::new(
+            device,
+            "White Pixel Texture",
+            1,
+            1,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        );
+        {
+            let texture = white_pixel_texture.texture_view().texture();
+            queue.write_texture(
+                texture.as_image_copy(),
+                bytemuck::cast_slice::<f32, _>(&[1.0, 1.0, 1.0, 1.0]),
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * 4),
+                    rows_per_image: None,
+                },
+                texture.size(),
+            );
+        }
+
         let camera_buffer = camera_buffer(device);
         let camera_bind_group_layout = camera_bind_group_layout(device);
         let camera_bind_group =
@@ -39,7 +83,11 @@ impl Ui {
         let lines_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Lines Render Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group_layout, &lines_bind_group_layout],
+                bind_group_layouts: &[
+                    &camera_bind_group_layout,
+                    &lines_bind_group_layout,
+                    &texture_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
         let lines_pipeline = render_pipeline(
@@ -60,7 +108,11 @@ impl Ui {
         let quads_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Quads Render Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group_layout, &quads_bind_group_layout],
+                bind_group_layouts: &[
+                    &camera_bind_group_layout,
+                    &quads_bind_group_layout,
+                    &texture_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
         let quads_pipeline = render_pipeline(
@@ -81,7 +133,11 @@ impl Ui {
         let ellipses_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Ellipses Render Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group_layout, &ellipses_bind_group_layout],
+                bind_group_layouts: &[
+                    &camera_bind_group_layout,
+                    &ellipses_bind_group_layout,
+                    &texture_bind_group_layout,
+                ],
                 push_constant_ranges: &[],
             });
         let ellipses_pipeline = render_pipeline(
@@ -93,6 +149,8 @@ impl Ui {
         );
 
         Self {
+            white_pixel_texture,
+
             camera_buffer,
             camera_bind_group,
 
@@ -116,7 +174,9 @@ impl Ui {
         self.layers.clear();
     }
 
-    pub fn push_line(&mut self, line: Line) {
+    pub fn push_line(&mut self, line: Line, texture: Option<Texture>) {
+        let texture = texture.unwrap_or_else(|| self.white_pixel_texture.clone());
+
         let Line { a, b, color, width } = line;
         let gpu_line = GpuLine {
             a: a.into(),
@@ -124,14 +184,25 @@ impl Ui {
             color: color.into(),
             width,
         };
-        if let Some(Layer::Lines(gpu_lines)) = self.layers.last_mut() {
+
+        if let Some(Layer::Lines {
+            gpu_lines,
+            texture: last_texture,
+        }) = self.layers.last_mut()
+            && texture == *last_texture
+        {
             gpu_lines.push(gpu_line);
         } else {
-            self.layers.push(Layer::Lines(vec![gpu_line]));
+            self.layers.push(Layer::Lines {
+                gpu_lines: vec![gpu_line],
+                texture,
+            });
         }
     }
 
-    pub fn push_quad(&mut self, quad: Quad) {
+    pub fn push_quad(&mut self, quad: Quad, texture: Option<Texture>) {
+        let texture = texture.unwrap_or_else(|| self.white_pixel_texture.clone());
+
         let Quad {
             position,
             size,
@@ -142,14 +213,25 @@ impl Ui {
             size: size.into(),
             color: color.into(),
         };
-        if let Some(Layer::Quads(gpu_quads)) = self.layers.last_mut() {
+
+        if let Some(Layer::Quads {
+            gpu_quads,
+            texture: last_texture,
+        }) = self.layers.last_mut()
+            && texture == *last_texture
+        {
             gpu_quads.push(gpu_quad);
         } else {
-            self.layers.push(Layer::Quads(vec![gpu_quad]));
+            self.layers.push(Layer::Quads {
+                gpu_quads: vec![gpu_quad],
+                texture,
+            });
         }
     }
 
-    pub fn push_ellipse(&mut self, ellipse: Ellipse) {
+    pub fn push_ellipse(&mut self, ellipse: Ellipse, texture: Option<Texture>) {
+        let texture = texture.unwrap_or_else(|| self.white_pixel_texture.clone());
+
         let Ellipse {
             position,
             size,
@@ -160,10 +242,19 @@ impl Ui {
             size: size.into(),
             color: color.into(),
         };
-        if let Some(Layer::Ellipses(gpu_ellipses)) = self.layers.last_mut() {
+
+        if let Some(Layer::Ellipses {
+            gpu_ellipses,
+            texture: last_texture,
+        }) = self.layers.last_mut()
+            && texture == *last_texture
+        {
             gpu_ellipses.push(gpu_ellipse);
         } else {
-            self.layers.push(Layer::Ellipses(vec![gpu_ellipse]));
+            self.layers.push(Layer::Ellipses {
+                gpu_ellipses: vec![gpu_ellipse],
+                texture,
+            });
         }
     }
 
@@ -187,13 +278,13 @@ impl Ui {
         let mut required_ellipses_count = 0;
         for layer in &self.layers {
             match layer {
-                Layer::Lines(gpu_lines) => {
+                Layer::Lines { gpu_lines, .. } => {
                     required_lines_count += gpu_lines.len();
                 }
-                Layer::Quads(gpu_quads) => {
+                Layer::Quads { gpu_quads, .. } => {
                     required_quads_count += gpu_quads.len();
                 }
-                Layer::Ellipses(gpu_ellipses) => {
+                Layer::Ellipses { gpu_ellipses, .. } => {
                     required_ellipses_count += gpu_ellipses.len();
                 }
             }
@@ -211,6 +302,7 @@ impl Ui {
 
         struct GpuLayer<'a> {
             pipeline: &'a wgpu::RenderPipeline,
+            texture: &'a Texture,
             bind_group: wgpu::BindGroup,
             vertex_count: u32,
             instance_count: u32,
@@ -238,7 +330,7 @@ impl Ui {
             self.layers
                 .iter()
                 .map(|layer| match layer {
-                    Layer::Lines(gpu_lines) => {
+                    Layer::Lines { gpu_lines, texture } => {
                         let lines_buffer = lines_buffer.as_deref_mut().unwrap_or_default();
 
                         let size = size_of_val::<[_]>(gpu_lines);
@@ -258,6 +350,7 @@ impl Ui {
                         GpuLayer {
                             pipeline: &self.lines_pipeline,
                             bind_group,
+                            texture,
                             vertex_count: 4,
                             instance_count: gpu_lines.len().try_into().expect(
                                 "the number of lines in a layer should be less than u32::MAX",
@@ -265,7 +358,7 @@ impl Ui {
                         }
                     }
 
-                    Layer::Quads(gpu_quads) => {
+                    Layer::Quads { gpu_quads, texture } => {
                         let quads_buffer = quads_buffer.as_deref_mut().unwrap_or_default();
 
                         let size = size_of_val::<[_]>(gpu_quads);
@@ -285,6 +378,7 @@ impl Ui {
                         GpuLayer {
                             pipeline: &self.quads_pipeline,
                             bind_group,
+                            texture,
                             vertex_count: 4,
                             instance_count: gpu_quads.len().try_into().expect(
                                 "the number of quads in a layer should be less than u32::MAX",
@@ -292,7 +386,10 @@ impl Ui {
                         }
                     }
 
-                    Layer::Ellipses(gpu_ellipses) => {
+                    Layer::Ellipses {
+                        gpu_ellipses,
+                        texture,
+                    } => {
                         let ellipses_buffer = ellipses_buffer.as_deref_mut().unwrap_or_default();
 
                         let size = size_of_val::<[_]>(gpu_ellipses);
@@ -312,6 +409,7 @@ impl Ui {
                         GpuLayer {
                             pipeline: &self.ellipses_pipeline,
                             bind_group,
+                            texture,
                             vertex_count: 4,
                             instance_count: gpu_ellipses.len().try_into().expect(
                                 "the number of ellipses in a layer should be less than u32::MAX",
@@ -321,46 +419,38 @@ impl Ui {
                 })
                 .collect::<Vec<_>>()
         };
-        queue.submit(std::iter::empty());
+
+        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
 
         for GpuLayer {
             pipeline,
             bind_group,
+            texture,
             vertex_count,
             instance_count,
         } in layers
         {
             render_pass.set_pipeline(pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &bind_group, &[]);
+            render_pass.set_bind_group(2, texture.bind_group(), &[]);
             render_pass.draw(0..vertex_count, 0..instance_count);
         }
     }
 }
 
-pub struct Line {
-    pub a: cgmath::Vector2<f32>,
-    pub b: cgmath::Vector2<f32>,
-    pub color: cgmath::Vector4<f32>,
-    pub width: f32,
-}
-
-pub struct Quad {
-    pub position: cgmath::Vector2<f32>,
-    pub size: cgmath::Vector2<f32>,
-    pub color: cgmath::Vector4<f32>,
-}
-
-pub struct Ellipse {
-    pub position: cgmath::Vector2<f32>,
-    pub size: cgmath::Vector2<f32>,
-    pub color: cgmath::Vector4<f32>,
-}
-
 enum Layer {
-    Lines(Vec<GpuLine>),
-    Quads(Vec<GpuQuad>),
-    Ellipses(Vec<GpuEllipse>),
+    Lines {
+        gpu_lines: Vec<GpuLine>,
+        texture: Texture,
+    },
+    Quads {
+        gpu_quads: Vec<GpuQuad>,
+        texture: Texture,
+    },
+    Ellipses {
+        gpu_ellipses: Vec<GpuEllipse>,
+        texture: Texture,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Zeroable, Pod)]

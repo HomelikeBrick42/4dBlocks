@@ -23,6 +23,7 @@ struct VertexOutput
 {
     float4 clip_position : SV_Position;
     uint instance_id;
+    float2 uv;
 }
 
 [shader("vertex")]
@@ -35,6 +36,7 @@ VertexOutput vertex(uint vertex_index: SV_VertexID, uint instance_id: SV_Instanc
 
     let x = float((vertex_index >> 0) & 1);
     let y = float((vertex_index >> 1) & 1);
+    out.uv = float2(x, y);
 
     let a = float2(line.ax, line.ay);
     let b = float2(line.bx, line.by);
@@ -54,13 +56,18 @@ struct FragmentOutput
     float4 color : SV_Target;
 }
 
+[vk::binding(0, 2)]
+Texture2D texture;
+[vk::binding(1, 2)]
+SamplerState textureSampler;
+
 [shader("fragment")]
 FragmentOutput fragment(VertexOutput in)
 {
     var out : FragmentOutput;
 
     let line = lines[in.instance_id];
-    out.color = float4(line.r, line.g, line.b, line.a);
+    out.color = float4(line.r, line.g, line.b, line.a) * texture.Sample(textureSampler, in.uv);
 
     return out;
 }
