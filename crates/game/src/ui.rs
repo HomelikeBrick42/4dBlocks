@@ -11,6 +11,10 @@ pub struct Ui {
     lines_bind_group_layout: wgpu::BindGroupLayout,
     lines_pipeline: wgpu::RenderPipeline,
 
+    quads_buffer: wgpu::Buffer,
+    quads_bind_group_layout: wgpu::BindGroupLayout,
+    quads_pipeline: wgpu::RenderPipeline,
+
     layers: Vec<Layer>,
 }
 
@@ -42,6 +46,27 @@ impl Ui {
             wgpu::PrimitiveTopology::TriangleStrip,
         );
 
+        let quads_buffer = quads_buffer(device, 0);
+        let quads_bind_group_layout = quads_bind_group_layout(device);
+
+        let quads_shader = device.create_shader_module(wgpu::include_wgsl!(concat!(
+            env!("OUT_DIR"),
+            "/shaders/quads.wgsl"
+        )));
+        let quads_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Quads Render Pipeline Layout"),
+                bind_group_layouts: &[&camera_bind_group_layout, &quads_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let quads_pipeline = render_pipeline(
+            device,
+            "Quads Render Pipeline",
+            &quads_pipeline_layout,
+            &quads_shader,
+            wgpu::PrimitiveTopology::TriangleStrip,
+        );
+
         Self {
             camera_buffer,
             camera_bind_group,
@@ -49,6 +74,10 @@ impl Ui {
             lines_buffer,
             lines_bind_group_layout,
             lines_pipeline,
+
+            quads_buffer,
+            quads_bind_group_layout,
+            quads_pipeline,
 
             layers: vec![],
         }
@@ -73,6 +102,24 @@ impl Ui {
         }
     }
 
+    pub fn push_quad(&mut self, quad: Quad) {
+        let Quad {
+            position,
+            size,
+            color,
+        } = quad;
+        let gpu_quad = GpuQuad {
+            position: position.into(),
+            size: size.into(),
+            color: color.into(),
+        };
+        if let Some(Layer::Quads(gpu_quads)) = self.layers.last_mut() {
+            gpu_quads.push(gpu_quad);
+        } else {
+            self.layers.push(Layer::Quads(vec![gpu_quad]));
+        }
+    }
+
     pub fn render(
         &mut self,
         device: &wgpu::Device,
@@ -89,10 +136,14 @@ impl Ui {
         }
 
         let mut required_lines_count = 0;
+        let mut required_quads_count = 0;
         for layer in &self.layers {
             match layer {
                 Layer::Lines(gpu_lines) => {
                     required_lines_count += gpu_lines.len();
+                }
+                Layer::Quads(gpu_quads) => {
+                    required_quads_count += gpu_quads.len();
                 }
             }
         }
@@ -100,8 +151,12 @@ impl Ui {
         if required_lines_count * size_of::<GpuLine>() > self.lines_buffer.size() as _ {
             self.lines_buffer = lines_buffer(device, required_lines_count);
         }
+        if required_quads_count * size_of::<GpuQuad>() > self.quads_buffer.size() as _ {
+            self.quads_buffer = quads_buffer(device, required_quads_count);
+        }
 
-        struct GpuLayer {
+        struct GpuLayer<'a> {
+            pipeline: &'a wgpu::RenderPipeline,
             bind_group: wgpu::BindGroup,
             vertex_count: u32,
             instance_count: u32,
@@ -113,7 +168,13 @@ impl Ui {
                     .and_then(|length| queue.write_buffer_with(&self.lines_buffer, 0, length));
             let mut lines_buffer = lines_buffer.as_deref_mut();
 
+            let mut quads_buffer =
+                NonZeroU64::new((required_quads_count * size_of::<GpuQuad>()) as _)
+                    .and_then(|length| queue.write_buffer_with(&self.quads_buffer, 0, length));
+            let mut quads_buffer = quads_buffer.as_deref_mut();
+
             let mut lines_size_so_far = 0usize;
+            let mut quads_size_so_far = 0usize;
             self.layers
                 .iter()
                 .map(|layer| match layer {
@@ -135,6 +196,7 @@ impl Ui {
                         lines_size_so_far += size;
 
                         GpuLayer {
+                            pipeline: &self.lines_pipeline,
                             bind_group,
                             vertex_count: 4,
                             instance_count: gpu_lines.len().try_into().expect(
@@ -142,19 +204,47 @@ impl Ui {
                             ),
                         }
                     }
+
+                    Layer::Quads(gpu_quads) => {
+                        let quads_buffer = quads_buffer.as_deref_mut().unwrap_or_default();
+
+                        let size = size_of_val::<[_]>(gpu_quads);
+                        quads_buffer[quads_size_so_far..][..size]
+                            .copy_from_slice(bytemuck::cast_slice(gpu_quads));
+
+                        let bind_group = quads_bind_group(
+                            device,
+                            &self.quads_bind_group_layout,
+                            &self.quads_buffer,
+                            quads_size_so_far,
+                            size,
+                        );
+
+                        quads_size_so_far += size;
+
+                        GpuLayer {
+                            pipeline: &self.quads_pipeline,
+                            bind_group,
+                            vertex_count: 4,
+                            instance_count: gpu_quads.len().try_into().expect(
+                                "the number of quads in a layer should be less than u32::MAX",
+                            ),
+                        }
+                    }
                 })
                 .collect::<Vec<_>>()
         };
-
-        render_pass.set_pipeline(&self.lines_pipeline);
-        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+        queue.submit(std::iter::empty());
 
         for GpuLayer {
+            pipeline,
             bind_group,
             vertex_count,
             instance_count,
         } in layers
         {
+            render_pass.set_pipeline(pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_bind_group(1, &bind_group, &[]);
             render_pass.draw(0..vertex_count, 0..instance_count);
         }
@@ -164,12 +254,19 @@ impl Ui {
 pub struct Line {
     pub a: cgmath::Vector2<f32>,
     pub b: cgmath::Vector2<f32>,
-    pub color: cgmath::Vector3<f32>,
+    pub color: cgmath::Vector4<f32>,
     pub width: f32,
+}
+
+pub struct Quad {
+    pub position: cgmath::Vector2<f32>,
+    pub size: cgmath::Vector2<f32>,
+    pub color: cgmath::Vector4<f32>,
 }
 
 enum Layer {
     Lines(Vec<GpuLine>),
+    Quads(Vec<GpuQuad>),
 }
 
 #[derive(Debug, Clone, Copy, Zeroable, Pod)]
@@ -223,7 +320,7 @@ fn camera_bind_group(
 struct GpuLine {
     pub a: [f32; 2],
     pub b: [f32; 2],
-    pub color: [f32; 3],
+    pub color: [f32; 4],
     pub width: f32,
 }
 
@@ -268,6 +365,62 @@ fn lines_bind_group(
             binding: 0,
             resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                 buffer: lines_buffer,
+                offset: offset as _,
+                size: NonZeroU64::new(size as _),
+            }),
+        }],
+    })
+}
+
+#[derive(Debug, Clone, Copy, Zeroable, Pod)]
+#[repr(C)]
+struct GpuQuad {
+    pub position: [f32; 2],
+    pub size: [f32; 2],
+    pub color: [f32; 4],
+}
+
+fn quads_buffer(device: &wgpu::Device, length: usize) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Quads Buffer"),
+        size: (length.max(1) * size_of::<GpuQuad>())
+            .try_into()
+            .expect("the size of the quads buffer should fit in a wgpu::BufferAddress"),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+fn quads_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Quads Bind Group Layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    })
+}
+
+fn quads_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    quads_buffer: &wgpu::Buffer,
+    offset: usize,
+    size: usize,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Quads Bind Group"),
+        layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: quads_buffer,
                 offset: offset as _,
                 size: NonZeroU64::new(size as _),
             }),

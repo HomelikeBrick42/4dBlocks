@@ -1,4 +1,4 @@
-use crate::ui::{Line, Ui};
+use crate::ui::{Line, Quad, Ui};
 
 pub struct State {
     surface_width: u32,
@@ -30,12 +30,24 @@ impl State {
         queue: &'a wgpu::Queue,
         #[expect(unused)] encoder: &mut wgpu::CommandEncoder,
     ) -> impl FnOnce(&mut wgpu::RenderPass<'_>) + use<'a> {
+        let aspect = self.surface_width as f32 / self.surface_height as f32;
+
         self.ui.clear();
+        self.ui.push_quad(Quad {
+            position: cgmath::vec2(0.0, 0.0),
+            size: cgmath::vec2(2.0 * aspect, 2.0),
+            color: cgmath::vec4(0.0, 0.0, 0.0, 1.0),
+        });
         self.ui.push_line(Line {
             a: cgmath::vec2(-1.0, -1.0),
             b: cgmath::vec2(1.0, 1.0),
-            color: cgmath::vec3(1.0, 0.0, 0.0),
+            color: cgmath::vec4(1.0, 0.0, 0.0, 1.0),
             width: 0.1,
+        });
+        self.ui.push_quad(Quad {
+            position: cgmath::vec2(0.0, 0.0),
+            size: cgmath::vec2(1.0, 1.0),
+            color: cgmath::vec4(0.0, 1.0, 0.0, 0.5),
         });
 
         move |render_pass: &mut wgpu::RenderPass<'_>| {

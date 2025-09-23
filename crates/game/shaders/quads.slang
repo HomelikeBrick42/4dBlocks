@@ -3,21 +3,20 @@ import include.camera;
 [vk::binding(0, 0)]
 ConstantBuffer<Camera> camera;
 
-struct Line
+struct Quad
 {
-    float ax;
-    float ay;
-    float bx;
-    float by;
+    float x;
+    float y;
+    float width;
+    float height;
     float r;
     float g;
     float b;
     float a;
-    float width;
 }
 
 [vk::binding(0, 1)]
-StructuredBuffer<Line> lines;
+StructuredBuffer<Quad> quads;
 
 struct VertexOutput
 {
@@ -31,18 +30,15 @@ VertexOutput vertex(uint vertex_index: SV_VertexID, uint instance_id: SV_Instanc
     var out : VertexOutput;
     out.instance_id = instance_id;
 
-    let line = lines[instance_id];
+    let quad = quads[instance_id];
 
     let x = float((vertex_index >> 0) & 1);
     let y = float((vertex_index >> 1) & 1);
+    let uv = float2(x, y);
 
-    let a = float2(line.ax, line.ay);
-    let b = float2(line.bx, line.by);
-    let a_to_b = normalize(b - a);
-    let a_to_b_perp = float2(-a_to_b.y, a_to_b.x);
-
-    let end_point = lerp(a, b, x);
-    var point = end_point - a_to_b_perp * ((y - 0.5) * line.width);
+    let position = float2(quad.x, quad.y);
+    let size = float2(quad.width, quad.height);
+    var point = position + (uv - 0.5) * size;
     point.x /= camera.aspect;
     out.clip_position = float4(point, 0.0, 1.0);
 
@@ -59,8 +55,8 @@ FragmentOutput fragment(VertexOutput in)
 {
     var out : FragmentOutput;
 
-    let line = lines[in.instance_id];
-    out.color = float4(line.r, line.g, line.b, line.a);
+    let quad = quads[in.instance_id];
+    out.color = float4(quad.r, quad.g, quad.b, quad.a);
 
     return out;
 }
