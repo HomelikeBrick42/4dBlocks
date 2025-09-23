@@ -5,14 +5,9 @@ ConstantBuffer<Camera> camera;
 
 struct Line
 {
-    float ax;
-    float ay;
-    float bx;
-    float by;
-    float r;
-    float g;
-    float b;
-    float a;
+    float2 a;
+    float2 b;
+    float3 color;
     float width;
 }
 
@@ -38,12 +33,10 @@ VertexOutput vertex(uint vertex_index: SV_VertexID, uint instance_id: SV_Instanc
     let y = float((vertex_index >> 1) & 1);
     out.uv = float2(x, y);
 
-    let a = float2(line.ax, line.ay);
-    let b = float2(line.bx, line.by);
-    let a_to_b = normalize(b - a);
+    let a_to_b = normalize(line.b - line.a);
     let a_to_b_perp = float2(-a_to_b.y, a_to_b.x);
 
-    let end_point = lerp(a, b, x);
+    let end_point = lerp(line.a, line.b, x);
     var point = end_point - a_to_b_perp * ((y - 0.5) * line.width);
     point.x /= camera.aspect;
     out.clip_position = float4(point, 0.0, 1.0);
@@ -62,7 +55,7 @@ FragmentOutput fragment(VertexOutput in)
     var out : FragmentOutput;
 
     let line = lines[in.instance_id];
-    out.color = float4(line.r, line.g, line.b, line.a);
+    out.color = float4(line.color, 1.0);
 
     return out;
 }

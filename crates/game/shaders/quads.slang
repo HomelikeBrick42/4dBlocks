@@ -5,14 +5,11 @@ ConstantBuffer<Camera> camera;
 
 struct Quad
 {
-    float x;
-    float y;
-    float width;
-    float height;
-    float r;
-    float g;
-    float b;
-    float a;
+    float2 position;
+    float2 size;
+    float4 color;
+    float2 uv_offset;
+    float2 uv_size;
 }
 
 [vk::binding(0, 1)]
@@ -37,9 +34,7 @@ VertexOutput vertex(uint vertex_index: SV_VertexID, uint instance_id: SV_Instanc
     let y = float((vertex_index >> 1) & 1);
     out.uv = float2(x, y);
 
-    let position = float2(quad.x, quad.y);
-    let size = float2(quad.width, quad.height);
-    var point = position + (out.uv - 0.5) * size;
+    var point = quad.position + (out.uv - 0.5) * quad.size;
     point.x /= camera.aspect;
     out.clip_position = float4(point, 0.0, 1.0);
 
@@ -62,7 +57,7 @@ FragmentOutput fragment(VertexOutput in)
     var out : FragmentOutput;
 
     let quad = quads[in.instance_id];
-    out.color = float4(quad.r, quad.g, quad.b, quad.a) * texture.Sample(textureSampler, in.uv);
+    out.color = quad.color * texture.Sample(textureSampler, quad.uv_offset + quad.uv_size * in.uv);
 
     return out;
 }

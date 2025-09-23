@@ -5,18 +5,15 @@ ConstantBuffer<Camera> camera;
 
 struct Ellipse
 {
-    float x;
-    float y;
-    float width;
-    float height;
-    float r;
-    float g;
-    float b;
-    float a;
+    float2 position;
+    float2 size;
+    float4 color;
+    float2 uv_offset;
+    float2 uv_size;
 }
 
 [vk::binding(0, 1)]
-StructuredBuffer<Ellipse> ellpises;
+StructuredBuffer<Ellipse> ellipses;
 
 struct VertexOutput
 {
@@ -31,15 +28,13 @@ VertexOutput vertex(uint vertex_index: SV_VertexID, uint instance_id: SV_Instanc
     var out : VertexOutput;
     out.instance_id = instance_id;
 
-    let ellpise = ellpises[instance_id];
+    let ellipse = ellipses[instance_id];
 
     let x = float((vertex_index >> 0) & 1);
     let y = float((vertex_index >> 1) & 1);
     out.uv = float2(x, y);
 
-    let position = float2(ellpise.x, ellpise.y);
-    let size = float2(ellpise.width, ellpise.height);
-    var point = position + (out.uv - 0.5) * size;
+    var point = ellipse.position + (out.uv - 0.5) * ellipse.size;
     point.x /= camera.aspect;
     out.clip_position = float4(point, 0.0, 1.0);
 
@@ -65,8 +60,8 @@ FragmentOutput fragment(VertexOutput in)
 
     var out : FragmentOutput;
 
-    let ellpise = ellpises[in.instance_id];
-    out.color = float4(ellpise.r, ellpise.g, ellpise.b, ellpise.a) * texture.Sample(textureSampler, in.uv);
+    let ellipse = ellipses[in.instance_id];
+    out.color = ellipse.color * texture.Sample(textureSampler, ellipse.uv_offset + ellipse.uv_size * in.uv);
 
     return out;
 }

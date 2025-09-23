@@ -44,7 +44,7 @@ impl State {
         self.ui.push_line(Line {
             a: cgmath::vec2(-1.0, -1.0),
             b: cgmath::vec2(1.0, 1.0),
-            color: cgmath::vec4(1.0, 0.0, 0.0, 1.0),
+            color: cgmath::vec3(1.0, 0.0, 0.0),
             width: 0.1,
         });
         self.ui.push_ellipse(

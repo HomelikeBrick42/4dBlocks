@@ -4,10 +4,16 @@ use crate::{state::render_pipeline, ui::texture::Texture};
 use bytemuck::{Pod, Zeroable};
 use std::num::NonZeroU64;
 
+pub struct TextureInfo {
+    pub texture: Texture,
+    pub uv_offset: cgmath::Vector2<f32>,
+    pub uv_size: cgmath::Vector2<f32>,
+}
+
 pub struct Line {
     pub a: cgmath::Vector2<f32>,
     pub b: cgmath::Vector2<f32>,
-    pub color: cgmath::Vector4<f32>,
+    pub color: cgmath::Vector3<f32>,
     pub width: f32,
 }
 
@@ -198,8 +204,16 @@ impl Ui {
         }
     }
 
-    pub fn push_quad(&mut self, quad: Quad, texture: Option<Texture>) {
-        let texture = texture.unwrap_or_else(|| self.white_pixel_texture.clone());
+    pub fn push_quad(&mut self, quad: Quad, texture: Option<TextureInfo>) {
+        let TextureInfo {
+            texture,
+            uv_offset,
+            uv_size,
+        } = texture.unwrap_or_else(|| TextureInfo {
+            texture: self.white_pixel_texture.clone(),
+            uv_offset: cgmath::vec2(0.0, 0.0),
+            uv_size: cgmath::vec2(1.0, 1.0),
+        });
 
         let Quad {
             position,
@@ -210,6 +224,8 @@ impl Ui {
             position: position.into(),
             size: size.into(),
             color: color.into(),
+            uv_offset: uv_offset.into(),
+            uv_size: uv_size.into(),
         };
 
         if let Some(Layer::Quads {
@@ -227,8 +243,16 @@ impl Ui {
         }
     }
 
-    pub fn push_ellipse(&mut self, ellipse: Ellipse, texture: Option<Texture>) {
-        let texture = texture.unwrap_or_else(|| self.white_pixel_texture.clone());
+    pub fn push_ellipse(&mut self, ellipse: Ellipse, texture: Option<TextureInfo>) {
+        let TextureInfo {
+            texture,
+            uv_offset,
+            uv_size,
+        } = texture.unwrap_or_else(|| TextureInfo {
+            texture: self.white_pixel_texture.clone(),
+            uv_offset: cgmath::vec2(0.0, 0.0),
+            uv_size: cgmath::vec2(1.0, 1.0),
+        });
 
         let Ellipse {
             position,
@@ -239,6 +263,8 @@ impl Ui {
             position: position.into(),
             size: size.into(),
             color: color.into(),
+            uv_offset: uv_offset.into(),
+            uv_size: uv_size.into(),
         };
 
         if let Some(Layer::Ellipses {
@@ -496,7 +522,7 @@ fn camera_bind_group(
 struct GpuLine {
     pub a: [f32; 2],
     pub b: [f32; 2],
-    pub color: [f32; 4],
+    pub color: [f32; 3],
     pub width: f32,
 }
 
@@ -548,6 +574,8 @@ struct GpuQuad {
     pub position: [f32; 2],
     pub size: [f32; 2],
     pub color: [f32; 4],
+    pub uv_offset: [f32; 2],
+    pub uv_size: [f32; 2],
 }
 
 fn quads_buffer(device: &wgpu::Device, length: usize) -> wgpu::Buffer {
@@ -598,6 +626,8 @@ struct GpuEllipse {
     pub position: [f32; 2],
     pub size: [f32; 2],
     pub color: [f32; 4],
+    pub uv_offset: [f32; 2],
+    pub uv_size: [f32; 2],
 }
 
 fn ellipses_buffer(device: &wgpu::Device, length: usize) -> wgpu::Buffer {
