@@ -1,0 +1,5 @@
+struct Camera
+{
+    float aspect;
+}
+
