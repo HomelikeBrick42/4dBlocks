@@ -15,6 +15,10 @@ pub struct Ui {
     quads_bind_group_layout: wgpu::BindGroupLayout,
     quads_pipeline: wgpu::RenderPipeline,
 
+    ellipses_buffer: wgpu::Buffer,
+    ellipses_bind_group_layout: wgpu::BindGroupLayout,
+    ellipses_pipeline: wgpu::RenderPipeline,
+
     layers: Vec<Layer>,
 }
 
@@ -67,6 +71,27 @@ impl Ui {
             wgpu::PrimitiveTopology::TriangleStrip,
         );
 
+        let ellipses_buffer = ellipses_buffer(device, 0);
+        let ellipses_bind_group_layout = ellipses_bind_group_layout(device);
+
+        let ellipses_shader = device.create_shader_module(wgpu::include_wgsl!(concat!(
+            env!("OUT_DIR"),
+            "/shaders/ellipses.wgsl"
+        )));
+        let ellipses_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Ellipses Render Pipeline Layout"),
+                bind_group_layouts: &[&camera_bind_group_layout, &ellipses_bind_group_layout],
+                push_constant_ranges: &[],
+            });
+        let ellipses_pipeline = render_pipeline(
+            device,
+            "Ellipses Render Pipeline",
+            &ellipses_pipeline_layout,
+            &ellipses_shader,
+            wgpu::PrimitiveTopology::TriangleStrip,
+        );
+
         Self {
             camera_buffer,
             camera_bind_group,
@@ -78,6 +103,10 @@ impl Ui {
             quads_buffer,
             quads_bind_group_layout,
             quads_pipeline,
+
+            ellipses_buffer,
+            ellipses_bind_group_layout,
+            ellipses_pipeline,
 
             layers: vec![],
         }
@@ -120,6 +149,24 @@ impl Ui {
         }
     }
 
+    pub fn push_ellipse(&mut self, ellipse: Ellipse) {
+        let Ellipse {
+            position,
+            size,
+            color,
+        } = ellipse;
+        let gpu_ellipse = GpuEllipse {
+            position: position.into(),
+            size: size.into(),
+            color: color.into(),
+        };
+        if let Some(Layer::Ellipses(gpu_ellipses)) = self.layers.last_mut() {
+            gpu_ellipses.push(gpu_ellipse);
+        } else {
+            self.layers.push(Layer::Ellipses(vec![gpu_ellipse]));
+        }
+    }
+
     pub fn render(
         &mut self,
         device: &wgpu::Device,
@@ -137,6 +184,7 @@ impl Ui {
 
         let mut required_lines_count = 0;
         let mut required_quads_count = 0;
+        let mut required_ellipses_count = 0;
         for layer in &self.layers {
             match layer {
                 Layer::Lines(gpu_lines) => {
@@ -144,6 +192,9 @@ impl Ui {
                 }
                 Layer::Quads(gpu_quads) => {
                     required_quads_count += gpu_quads.len();
+                }
+                Layer::Ellipses(gpu_ellipses) => {
+                    required_ellipses_count += gpu_ellipses.len();
                 }
             }
         }
@@ -153,6 +204,9 @@ impl Ui {
         }
         if required_quads_count * size_of::<GpuQuad>() > self.quads_buffer.size() as _ {
             self.quads_buffer = quads_buffer(device, required_quads_count);
+        }
+        if required_ellipses_count * size_of::<GpuEllipse>() > self.ellipses_buffer.size() as _ {
+            self.ellipses_buffer = ellipses_buffer(device, required_ellipses_count);
         }
 
         struct GpuLayer<'a> {
@@ -173,8 +227,14 @@ impl Ui {
                     .and_then(|length| queue.write_buffer_with(&self.quads_buffer, 0, length));
             let mut quads_buffer = quads_buffer.as_deref_mut();
 
+            let mut ellipses_buffer =
+                NonZeroU64::new((required_ellipses_count * size_of::<GpuQuad>()) as _)
+                    .and_then(|length| queue.write_buffer_with(&self.ellipses_buffer, 0, length));
+            let mut ellipses_buffer = ellipses_buffer.as_deref_mut();
+
             let mut lines_size_so_far = 0usize;
             let mut quads_size_so_far = 0usize;
+            let mut ellipses_size_so_far = 0usize;
             self.layers
                 .iter()
                 .map(|layer| match layer {
@@ -231,6 +291,33 @@ impl Ui {
                             ),
                         }
                     }
+
+                    Layer::Ellipses(gpu_ellipses) => {
+                        let ellipses_buffer = ellipses_buffer.as_deref_mut().unwrap_or_default();
+
+                        let size = size_of_val::<[_]>(gpu_ellipses);
+                        ellipses_buffer[ellipses_size_so_far..][..size]
+                            .copy_from_slice(bytemuck::cast_slice(gpu_ellipses));
+
+                        let bind_group = ellipses_bind_group(
+                            device,
+                            &self.ellipses_bind_group_layout,
+                            &self.ellipses_buffer,
+                            ellipses_size_so_far,
+                            size,
+                        );
+
+                        ellipses_size_so_far += size;
+
+                        GpuLayer {
+                            pipeline: &self.ellipses_pipeline,
+                            bind_group,
+                            vertex_count: 4,
+                            instance_count: gpu_ellipses.len().try_into().expect(
+                                "the number of ellipses in a layer should be less than u32::MAX",
+                            ),
+                        }
+                    }
                 })
                 .collect::<Vec<_>>()
         };
@@ -264,9 +351,16 @@ pub struct Quad {
     pub color: cgmath::Vector4<f32>,
 }
 
+pub struct Ellipse {
+    pub position: cgmath::Vector2<f32>,
+    pub size: cgmath::Vector2<f32>,
+    pub color: cgmath::Vector4<f32>,
+}
+
 enum Layer {
     Lines(Vec<GpuLine>),
     Quads(Vec<GpuQuad>),
+    Ellipses(Vec<GpuEllipse>),
 }
 
 #[derive(Debug, Clone, Copy, Zeroable, Pod)]
@@ -421,6 +515,62 @@ fn quads_bind_group(
             binding: 0,
             resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
                 buffer: quads_buffer,
+                offset: offset as _,
+                size: NonZeroU64::new(size as _),
+            }),
+        }],
+    })
+}
+
+#[derive(Debug, Clone, Copy, Zeroable, Pod)]
+#[repr(C)]
+struct GpuEllipse {
+    pub position: [f32; 2],
+    pub size: [f32; 2],
+    pub color: [f32; 4],
+}
+
+fn ellipses_buffer(device: &wgpu::Device, length: usize) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Ellipses Buffer"),
+        size: (length.max(1) * size_of::<GpuEllipse>())
+            .try_into()
+            .expect("the size of the ellipses buffer should fit in a wgpu::BufferAddress"),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    })
+}
+
+fn ellipses_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+    device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Ellipses Bind Group Layout"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    })
+}
+
+fn ellipses_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    ellipses_buffer: &wgpu::Buffer,
+    offset: usize,
+    size: usize,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("Ellipses Bind Group"),
+        layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                buffer: ellipses_buffer,
                 offset: offset as _,
                 size: NonZeroU64::new(size as _),
             }),

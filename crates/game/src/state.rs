@@ -1,4 +1,4 @@
-use crate::ui::{Line, Quad, Ui};
+use crate::ui::{Ellipse, Line, Quad, Ui};
 
 pub struct State {
     surface_width: u32,
@@ -43,6 +43,11 @@ impl State {
             b: cgmath::vec2(1.0, 1.0),
             color: cgmath::vec4(1.0, 0.0, 0.0, 1.0),
             width: 0.1,
+        });
+        self.ui.push_ellipse(Ellipse {
+            position: cgmath::vec2(0.5, 0.0),
+            size: cgmath::vec2(1.0, 0.5),
+            color: cgmath::vec4(0.0, 0.0, 1.0, 1.0),
         });
         self.ui.push_quad(Quad {
             position: cgmath::vec2(0.0, 0.0),

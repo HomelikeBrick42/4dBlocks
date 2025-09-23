@@ -2,4 +2,3 @@ struct Camera
 {
     float aspect;
 }
-
