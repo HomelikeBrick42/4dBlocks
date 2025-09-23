@@ -83,11 +83,7 @@ impl Ui {
         let lines_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Lines Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    &camera_bind_group_layout,
-                    &lines_bind_group_layout,
-                    &texture_bind_group_layout,
-                ],
+                bind_group_layouts: &[&camera_bind_group_layout, &lines_bind_group_layout],
                 push_constant_ranges: &[],
             });
         let lines_pipeline = render_pipeline(
@@ -174,9 +170,7 @@ impl Ui {
         self.layers.clear();
     }
 
-    pub fn push_line(&mut self, line: Line, texture: Option<Texture>) {
-        let texture = texture.unwrap_or_else(|| self.white_pixel_texture.clone());
-
+    pub fn push_line(&mut self, line: Line) {
         let Line { a, b, color, width } = line;
         let gpu_line = GpuLine {
             a: a.into(),
@@ -185,17 +179,11 @@ impl Ui {
             width,
         };
 
-        if let Some(Layer::Lines {
-            gpu_lines,
-            texture: last_texture,
-        }) = self.layers.last_mut()
-            && texture == *last_texture
-        {
+        if let Some(Layer::Lines { gpu_lines }) = self.layers.last_mut() {
             gpu_lines.push(gpu_line);
         } else {
             self.layers.push(Layer::Lines {
                 gpu_lines: vec![gpu_line],
-                texture,
             });
         }
     }
@@ -302,7 +290,7 @@ impl Ui {
 
         struct GpuLayer<'a> {
             pipeline: &'a wgpu::RenderPipeline,
-            texture: &'a Texture,
+            texture: Option<&'a Texture>,
             bind_group: wgpu::BindGroup,
             vertex_count: u32,
             instance_count: u32,
@@ -330,7 +318,7 @@ impl Ui {
             self.layers
                 .iter()
                 .map(|layer| match layer {
-                    Layer::Lines { gpu_lines, texture } => {
+                    Layer::Lines { gpu_lines } => {
                         let lines_buffer = lines_buffer.as_deref_mut().unwrap_or_default();
 
                         let size = size_of_val::<[_]>(gpu_lines);
@@ -350,7 +338,7 @@ impl Ui {
                         GpuLayer {
                             pipeline: &self.lines_pipeline,
                             bind_group,
-                            texture,
+                            texture: None,
                             vertex_count: 4,
                             instance_count: gpu_lines.len().try_into().expect(
                                 "the number of lines in a layer should be less than u32::MAX",
@@ -378,7 +366,7 @@ impl Ui {
                         GpuLayer {
                             pipeline: &self.quads_pipeline,
                             bind_group,
-                            texture,
+                            texture: Some(texture),
                             vertex_count: 4,
                             instance_count: gpu_quads.len().try_into().expect(
                                 "the number of quads in a layer should be less than u32::MAX",
@@ -409,7 +397,7 @@ impl Ui {
                         GpuLayer {
                             pipeline: &self.ellipses_pipeline,
                             bind_group,
-                            texture,
+                            texture: Some(texture),
                             vertex_count: 4,
                             instance_count: gpu_ellipses.len().try_into().expect(
                                 "the number of ellipses in a layer should be less than u32::MAX",
@@ -432,7 +420,9 @@ impl Ui {
         {
             render_pass.set_pipeline(pipeline);
             render_pass.set_bind_group(1, &bind_group, &[]);
-            render_pass.set_bind_group(2, texture.bind_group(), &[]);
+            if let Some(texture) = texture {
+                render_pass.set_bind_group(2, texture.bind_group(), &[]);
+            }
             render_pass.draw(0..vertex_count, 0..instance_count);
         }
     }
@@ -441,7 +431,6 @@ impl Ui {
 enum Layer {
     Lines {
         gpu_lines: Vec<GpuLine>,
-        texture: Texture,
     },
     Quads {
         gpu_quads: Vec<GpuQuad>,

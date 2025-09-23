@@ -41,15 +41,12 @@ impl State {
             },
             None,
         );
-        self.ui.push_line(
-            Line {
-                a: cgmath::vec2(-1.0, -1.0),
-                b: cgmath::vec2(1.0, 1.0),
-                color: cgmath::vec4(1.0, 0.0, 0.0, 1.0),
-                width: 0.1,
-            },
-            None,
-        );
+        self.ui.push_line(Line {
+            a: cgmath::vec2(-1.0, -1.0),
+            b: cgmath::vec2(1.0, 1.0),
+            color: cgmath::vec4(1.0, 0.0, 0.0, 1.0),
+            width: 0.1,
+        });
         self.ui.push_ellipse(
             Ellipse {
                 position: cgmath::vec2(0.5, 0.0),

@@ -56,18 +56,13 @@ struct FragmentOutput
     float4 color : SV_Target;
 }
 
-[vk::binding(0, 2)]
-Texture2D texture;
-[vk::binding(1, 2)]
-SamplerState textureSampler;
-
 [shader("fragment")]
 FragmentOutput fragment(VertexOutput in)
 {
     var out : FragmentOutput;
 
     let line = lines[in.instance_id];
-    out.color = float4(line.r, line.g, line.b, line.a) * texture.Sample(textureSampler, in.uv);
+    out.color = float4(line.r, line.g, line.b, line.a);
 
     return out;
 }
