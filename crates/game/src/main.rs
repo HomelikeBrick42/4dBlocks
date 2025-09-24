@@ -10,19 +10,25 @@ use std::{
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{ElementState, MouseButton, StartCause, WindowEvent},
+    event::{ElementState, KeyEvent, MouseButton, StartCause, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowAttributes, WindowId},
 };
 
 pub struct Input {
     pub mouse_position: cgmath::Vector2<f32>,
     mouse_buttons: HashSet<MouseButton>,
+    keys: HashSet<KeyCode>,
 }
 
 impl Input {
     pub fn mouse_button_pressed(&self, mouse_button: MouseButton) -> bool {
         self.mouse_buttons.contains(&mouse_button)
+    }
+
+    pub fn key_pressed(&self, key: KeyCode) -> bool {
+        self.keys.contains(&key)
     }
 }
 
@@ -161,12 +167,26 @@ fn main() -> Result<(), winit::error::EventLoopError> {
                     self.state.mouse_moved(&self.input, old_position);
                 }
 
+                WindowEvent::KeyboardInput {
+                    device_id: _,
+                    event:
+                        KeyEvent {
+                            physical_key: PhysicalKey::Code(key),
+                            state,
+                            ..
+                        },
+                    is_synthetic: _,
+                } => match state {
+                    ElementState::Pressed => _ = self.input.keys.insert(key),
+                    ElementState::Released => _ = self.input.keys.remove(&key),
+                },
+
                 _ => {}
             }
         }
 
         fn about_to_wait(&mut self, #[expect(unused)] event_loop: &ActiveEventLoop) {
-            self.state.update(self.dt.as_secs_f32());
+            self.state.update(&self.input, self.dt.as_secs_f32());
             self.render();
         }
     }
@@ -303,6 +323,7 @@ fn main() -> Result<(), winit::error::EventLoopError> {
         input: Input {
             mouse_position: cgmath::vec2(0.0, 0.0),
             mouse_buttons: HashSet::new(),
+            keys: HashSet::new(),
         },
         window_state: None,
     };

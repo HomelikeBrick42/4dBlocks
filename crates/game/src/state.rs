@@ -5,7 +5,7 @@ use crate::{
 use cgmath::ElementWise;
 use math::{NoE2Rotor, Rotor, Transform};
 use std::{collections::HashMap, f32::consts::TAU};
-use winit::event::MouseButton;
+use winit::{event::MouseButton, keyboard::KeyCode};
 
 pub struct Camera {
     pub position: cgmath::Vector4<f32>,
@@ -66,9 +66,44 @@ impl State {
         }
     }
 
-    pub fn update(&mut self, ts: f32) {
+    pub fn update(&mut self, input: &Input, ts: f32) {
         self.frame_times.rotate_right(1);
         self.frame_times[0] = 1.0 / ts;
+
+        // camera stuff
+        {
+            let speed = 2.0;
+
+            let forward = self.camera.rotation.x();
+            let up = self.camera.rotation.y();
+            let right = self.camera.rotation.z();
+            let ana = self.camera.rotation.w();
+
+            if input.key_pressed(KeyCode::KeyW) {
+                self.camera.position += forward * speed * ts;
+            }
+            if input.key_pressed(KeyCode::KeyS) {
+                self.camera.position -= forward * speed * ts;
+            }
+            if input.key_pressed(KeyCode::KeyA) {
+                self.camera.position -= right * speed * ts;
+            }
+            if input.key_pressed(KeyCode::KeyD) {
+                self.camera.position += right * speed * ts;
+            }
+            if input.key_pressed(KeyCode::KeyQ) {
+                self.camera.position -= up * speed * ts;
+            }
+            if input.key_pressed(KeyCode::KeyE) {
+                self.camera.position += up * speed * ts;
+            }
+            if input.key_pressed(KeyCode::KeyR) {
+                self.camera.position += ana * speed * ts;
+            }
+            if input.key_pressed(KeyCode::KeyF) {
+                self.camera.position -= ana * speed * ts;
+            }
+        }
     }
 
     pub fn surface_resized(&mut self, width: u32, height: u32) {
