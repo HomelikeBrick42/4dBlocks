@@ -1,7 +1,7 @@
 use crate::{
     Input,
     camera::Camera,
-    ray_tracing::{RayTracing, RayTracingTarget},
+    ray_tracing::{CameraBasis, RayTracing, RayTracingTarget},
     ui::{Ellipse, Font, Line, Quad, TextureInfo, Ui},
 };
 use cgmath::ElementWise;
@@ -94,7 +94,13 @@ impl State {
                     self.surface_height,
                 );
             }
-            self.ray_tracing.render(&self.main_view, encoder);
+            self.ray_tracing.render(
+                queue,
+                self.camera.transform(),
+                CameraBasis::XYZ,
+                &self.main_view,
+                encoder,
+            );
         }
 
         self.ui.clear();
