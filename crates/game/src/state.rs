@@ -167,28 +167,27 @@ impl State {
             );
 
             #[rustfmt::skip]
-            let mut directions: [(cgmath::Vector3<f32>, cgmath::Vector3<f32>, &str); _] = [
-                (cgmath::vec3( 1.0,  0.0,  0.0), cgmath::vec3(1.0, 0.0, 0.0), "+X"),
-                (cgmath::vec3(-1.0,  0.0,  0.0), cgmath::vec3(1.0, 0.0, 0.0), "-X"),
-                (cgmath::vec3( 0.0,  1.0,  0.0), cgmath::vec3(0.0, 0.0, 1.0), "+Z"),
-                (cgmath::vec3( 0.0, -1.0,  0.0), cgmath::vec3(0.0, 0.0, 1.0), "-Z"),
-                (cgmath::vec3( 0.0,  0.0,  1.0), cgmath::vec3(1.0, 0.0, 1.0), "+W"),
-                (cgmath::vec3( 0.0,  0.0, -1.0), cgmath::vec3(1.0, 0.0, 1.0), "-W"),
+            let mut directions: [(cgmath::Vector4<f32>, cgmath::Vector3<f32>, &str); _] = [
+                (cgmath::vec4( 1.0, 0.0,  0.0,  0.0), cgmath::vec3(1.0, 0.0, 0.0), "+X"),
+                (cgmath::vec4(-1.0, 0.0,  0.0,  0.0), cgmath::vec3(1.0, 0.0, 0.0), "-X"),
+                (cgmath::vec4( 0.0, 0.0,  1.0,  0.0), cgmath::vec3(0.0, 0.0, 1.0), "+Z"),
+                (cgmath::vec4( 0.0, 0.0, -1.0,  0.0), cgmath::vec3(0.0, 0.0, 1.0), "-Z"),
+                (cgmath::vec4( 0.0, 0.0,  0.0,  1.0), cgmath::vec3(1.0, 0.0, 1.0), "+W"),
+                (cgmath::vec4( 0.0, 0.0,  0.0, -1.0), cgmath::vec3(1.0, 0.0, 1.0), "-W"),
             ];
             for (direction, _, _) in &mut directions {
-                let new_direction = self
+                *direction = self
                     .camera
                     .rotation
                     .reverse()
-                    .transform_direction(cgmath::vec4(direction.x, 0.0, direction.y, direction.z));
-                *direction = cgmath::vec3(new_direction.x, new_direction.z, new_direction.w);
+                    .transform_direction(*direction);
             }
-            directions.sort_by(|(a, _, _), (b, _, _)| a.z.total_cmp(&b.z));
+            directions.sort_by(|(a, _, _), (b, _, _)| a.w.total_cmp(&b.w));
             for (direction, color, name) in directions {
                 self.ui.push_line(Line {
                     a: compass_position,
                     b: compass_position
-                        + cgmath::vec2(direction.y, direction.x)
+                        + cgmath::vec2(direction.z, direction.x)
                             .mul_element_wise(inner_compass_size * 0.5),
                     color,
                     width: 0.05,
@@ -198,7 +197,7 @@ impl State {
                     &mut self.ui,
                     name,
                     compass_position
-                        + cgmath::vec2(direction.y, direction.x)
+                        + cgmath::vec2(direction.z, direction.x)
                             .mul_element_wise(inner_compass_size * 0.45),
                     0.1,
                     cgmath::vec4(0.0, 0.0, 0.0, 1.0),
