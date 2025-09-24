@@ -1,35 +1,9 @@
 use crate::{
     Input,
+    camera::Camera,
     ui::{Ellipse, Font, Line, Quad, Ui},
 };
 use cgmath::ElementWise;
-use math::{NoE2Rotor, Rotor, Transform};
-use std::{collections::HashMap, f32::consts::TAU};
-use winit::{event::MouseButton, keyboard::KeyCode};
-
-pub struct Camera {
-    pub position: cgmath::Vector4<f32>,
-    pub rotation: NoE2Rotor,
-    pub xy_rotation: f32,
-}
-
-impl Default for Camera {
-    fn default() -> Self {
-        Self {
-            position: cgmath::vec4(0.0, 0.0, 0.0, 0.0),
-            rotation: NoE2Rotor::identity(),
-            xy_rotation: 0.0,
-        }
-    }
-}
-
-impl Camera {
-    pub fn transform(&self) -> Transform {
-        Transform::translation(self.position).then(Transform::from_rotor(
-            Rotor::from_no_e2_rotor(self.rotation).then(Rotor::rotate_xy(self.xy_rotation)),
-        ))
-    }
-}
 
 pub struct State {
     surface_width: u32,
@@ -55,7 +29,7 @@ impl State {
                 device,
                 queue,
                 include_str!("../fonts/space_mono.fnt"),
-                &HashMap::from([
+                &<_>::from([
                     (0, include_bytes!("../fonts/space_mono_0.png").as_slice()),
                     (1, include_bytes!("../fonts/space_mono_1.png").as_slice()),
                 ]),
@@ -70,40 +44,7 @@ impl State {
         self.frame_times.rotate_right(1);
         self.frame_times[0] = 1.0 / ts;
 
-        // camera stuff
-        {
-            let speed = 2.0;
-
-            let forward = self.camera.rotation.x();
-            let up = self.camera.rotation.y();
-            let right = self.camera.rotation.z();
-            let ana = self.camera.rotation.w();
-
-            if input.key_pressed(KeyCode::KeyW) {
-                self.camera.position += forward * speed * ts;
-            }
-            if input.key_pressed(KeyCode::KeyS) {
-                self.camera.position -= forward * speed * ts;
-            }
-            if input.key_pressed(KeyCode::KeyA) {
-                self.camera.position -= right * speed * ts;
-            }
-            if input.key_pressed(KeyCode::KeyD) {
-                self.camera.position += right * speed * ts;
-            }
-            if input.key_pressed(KeyCode::KeyQ) {
-                self.camera.position -= up * speed * ts;
-            }
-            if input.key_pressed(KeyCode::KeyE) {
-                self.camera.position += up * speed * ts;
-            }
-            if input.key_pressed(KeyCode::KeyR) {
-                self.camera.position += ana * speed * ts;
-            }
-            if input.key_pressed(KeyCode::KeyF) {
-                self.camera.position -= ana * speed * ts;
-            }
-        }
+        self.camera.update(input, ts);
     }
 
     pub fn surface_resized(&mut self, width: u32, height: u32) {
@@ -113,25 +54,7 @@ impl State {
 
     pub fn mouse_moved(&mut self, input: &Input, old_position: cgmath::Vector2<f32>) {
         let delta = input.mouse_position - old_position;
-
-        let sensitivity = 3.0;
-
-        if input.mouse_button_pressed(MouseButton::Left) {
-            self.camera.rotation = self
-                .camera
-                .rotation
-                .then(NoE2Rotor::rotate_xz(delta.x * sensitivity));
-            self.camera.xy_rotation += delta.y * sensitivity;
-            self.camera.xy_rotation = self.camera.xy_rotation.clamp(-TAU * 0.25, TAU * 0.25);
-        }
-
-        if input.mouse_button_pressed(MouseButton::Right) {
-            self.camera.rotation = self
-                .camera
-                .rotation
-                .then(NoE2Rotor::rotate_zw(delta.x * sensitivity))
-                .then(NoE2Rotor::rotate_xw(delta.y * sensitivity));
-        }
+        self.camera.mouse_moved(input, delta);
     }
 
     pub fn render<'a>(
