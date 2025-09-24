@@ -1,7 +1,8 @@
 use crate::{
     Input,
     camera::Camera,
-    ui::{Ellipse, Font, Line, Quad, Ui},
+    ray_tracing::{RayTracing, RayTracingTarget},
+    ui::{Ellipse, Font, Line, Quad, TextureInfo, Ui},
 };
 use cgmath::ElementWise;
 
@@ -15,28 +16,43 @@ pub struct State {
     ui: Ui,
 
     frame_times: [f32; 128],
+
+    ray_tracing: RayTracing,
+    main_view: RayTracingTarget,
 }
 
 impl State {
     pub fn new(device: &wgpu::Device, queue: &wgpu::Queue) -> Self {
+        let surface_width = 1;
+        let surface_height = 1;
+
+        let space_mono = Font::from_raw(
+            device,
+            queue,
+            include_str!("../fonts/space_mono.fnt"),
+            &<_>::from([
+                (0, include_bytes!("../fonts/space_mono_0.png").as_slice()),
+                (1, include_bytes!("../fonts/space_mono_1.png").as_slice()),
+            ]),
+        );
+
+        let ray_tracing = RayTracing::new(device);
+        let main_view =
+            RayTracingTarget::new(device, "Main View Texture", surface_width, surface_height);
+
         Self {
-            surface_width: 0,
-            surface_height: 0,
+            surface_width,
+            surface_height,
 
             camera: Camera::default(),
 
-            space_mono: Font::from_raw(
-                device,
-                queue,
-                include_str!("../fonts/space_mono.fnt"),
-                &<_>::from([
-                    (0, include_bytes!("../fonts/space_mono_0.png").as_slice()),
-                    (1, include_bytes!("../fonts/space_mono_1.png").as_slice()),
-                ]),
-            ),
+            space_mono,
             ui: Ui::new(device, queue),
 
             frame_times: [0.0; _],
+
+            ray_tracing,
+            main_view,
         }
     }
 
@@ -61,18 +77,38 @@ impl State {
         &'a mut self,
         device: &'a wgpu::Device,
         queue: &'a wgpu::Queue,
-        #[expect(unused)] encoder: &mut wgpu::CommandEncoder,
+        encoder: &mut wgpu::CommandEncoder,
     ) -> impl FnOnce(&mut wgpu::RenderPass<'_>) + use<'a> {
         let aspect = self.surface_width as f32 / self.surface_height as f32;
+
+        // render main view
+        {
+            let main_view_size = self.main_view.texture().texture_view().texture().size();
+            if main_view_size.width != self.surface_width
+                || main_view_size.height != self.surface_height
+            {
+                self.main_view = RayTracingTarget::new(
+                    device,
+                    "Main View Texture",
+                    self.surface_width,
+                    self.surface_height,
+                );
+            }
+            self.ray_tracing.render(&self.main_view, encoder);
+        }
 
         self.ui.clear();
         self.ui.push_quad(
             Quad {
                 position: cgmath::vec2(0.0, 0.0),
                 size: cgmath::vec2(2.0 * aspect, 2.0),
-                color: cgmath::vec4(0.0, 0.0, 0.0, 1.0),
+                color: cgmath::vec4(1.0, 1.0, 1.0, 1.0),
             },
-            None,
+            Some(TextureInfo {
+                texture: self.main_view.texture().clone(),
+                uv_offset: cgmath::vec2(0.0, 0.0),
+                uv_size: cgmath::vec2(1.0, 1.0),
+            }),
         );
 
         {

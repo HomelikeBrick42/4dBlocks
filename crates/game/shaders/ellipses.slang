@@ -1,4 +1,4 @@
-import include.camera;
+import include.ui_camera;
 
 [vk::binding(0, 0)]
 ConstantBuffer<Camera> camera;
