@@ -36,7 +36,7 @@ impl State {
             ]),
         );
 
-        let ray_tracing = RayTracing::new(device);
+        let ray_tracing = RayTracing::new(device, queue);
         let main_view =
             RayTracingTarget::new(device, "Main View Texture", surface_width, surface_height);
 

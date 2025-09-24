@@ -27,7 +27,7 @@ impl Camera {
     }
 
     pub fn update(&mut self, input: &Input, ts: f32) {
-        let speed = 2.0;
+        let speed = 10.0;
 
         let forward = self.rotation.x();
         let up = self.rotation.y();
