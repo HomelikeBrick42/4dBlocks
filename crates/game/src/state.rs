@@ -39,6 +39,8 @@ pub struct State {
 
     space_mono: Font,
     ui: Ui,
+
+    frame_times: [f32; 128],
 }
 
 impl State {
@@ -59,10 +61,15 @@ impl State {
                 ]),
             ),
             ui: Ui::new(device, queue),
+
+            frame_times: [0.0; _],
         }
     }
 
-    pub fn update(&mut self, #[expect(unused)] ts: f32) {}
+    pub fn update(&mut self, ts: f32) {
+        self.frame_times.rotate_right(1);
+        self.frame_times[0] = 1.0 / ts;
+    }
 
     pub fn surface_resized(&mut self, width: u32, height: u32) {
         self.surface_width = width;
@@ -164,13 +171,16 @@ impl State {
             }
         }
 
-        self.space_mono.draw_str(
-            &mut self.ui,
-            "Hello, world!",
-            cgmath::vec2(0.0, 0.0),
-            0.2,
-            cgmath::vec4(1.0, 0.0, 0.0, 1.0),
-        );
+        {
+            let fps = self.frame_times.iter().sum::<f32>() / self.frame_times.len() as f32;
+            self.space_mono.draw_str(
+                &mut self.ui,
+                &format!("FPS: {fps:.2}"),
+                cgmath::vec2(0.0, 0.95),
+                0.1,
+                cgmath::vec4(1.0, 1.0, 1.0, 1.0),
+            );
+        }
 
         move |render_pass: &mut wgpu::RenderPass<'_>| {
             self.ui.render(
