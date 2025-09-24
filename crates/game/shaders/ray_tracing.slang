@@ -24,6 +24,18 @@ void trace_rays(uint3 global_index: SV_DispatchThreadID)
     ray.origin = camera.position;
     ray.direction = normalize(camera.right * uv.x * camera.aspect + camera.up * uv.y + camera.forward);
 
-    let color = float3(ray.direction.xyz * 0.5 + 0.5);
+    let color = sky_color(ray);
     main_texture.Store(global_index.xy, float4(color, 1.0));
+}
+
+static const float4 SUN_DIRECTION = normalize(float4(-0.3, 1.0, 0.3, 0.0));
+
+float3 sky_color(Ray ray)
+{
+    if (dot(SUN_DIRECTION, ray.direction) > 0.99)
+        return float3(1.0, 1.0, 1.0);
+
+    let up_sky_color = float3(0.4, 0.5, 0.8);
+    let down_sky_color = float3(0.1, 0.2, 0.4);
+    return lerp(down_sky_color, up_sky_color, ray.direction.y * 0.5 + 0.5);
 }
