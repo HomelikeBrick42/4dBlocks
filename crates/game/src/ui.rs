@@ -1,6 +1,9 @@
+pub mod font;
 pub mod texture;
 
-use crate::{state::render_pipeline, ui::texture::Texture};
+pub use {font::Font, texture::Texture};
+
+use crate::state::render_pipeline;
 use bytemuck::{Pod, Zeroable};
 use std::num::NonZeroU64;
 
@@ -61,7 +64,8 @@ impl Ui {
             "White Pixel Texture",
             1,
             1,
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            wgpu::TextureUsages::COPY_DST,
+            wgpu::FilterMode::Nearest,
         );
         {
             let texture = white_pixel_texture.texture_view().texture();

@@ -11,6 +11,7 @@ impl Texture {
         width: u32,
         height: u32,
         usage: wgpu::TextureUsages,
+        mag_filter: wgpu::FilterMode,
     ) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some(name),
@@ -23,7 +24,7 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba32Float,
-            usage,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | usage,
             view_formats: &[],
         });
 
@@ -32,7 +33,7 @@ impl Texture {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter: wgpu::FilterMode::Nearest,
+            mag_filter,
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });

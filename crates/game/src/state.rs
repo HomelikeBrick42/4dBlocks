@@ -1,11 +1,10 @@
-use std::f32::consts::TAU;
-
 use crate::{
     Input,
-    ui::{Ellipse, Line, Quad, Ui},
+    ui::{Ellipse, Font, Line, Quad, Ui},
 };
 use cgmath::ElementWise;
 use math::{NoE2Rotor, Rotor, Transform};
+use std::{collections::HashMap, f32::consts::TAU};
 use winit::event::MouseButton;
 
 pub struct Camera {
@@ -38,6 +37,7 @@ pub struct State {
 
     camera: Camera,
 
+    space_mono: Font,
     ui: Ui,
 }
 
@@ -49,6 +49,15 @@ impl State {
 
             camera: Camera::default(),
 
+            space_mono: Font::from_raw(
+                device,
+                queue,
+                include_str!("../fonts/space_mono.fnt"),
+                &HashMap::from([
+                    (0, include_bytes!("../fonts/space_mono_0.png").as_slice()),
+                    (1, include_bytes!("../fonts/space_mono_1.png").as_slice()),
+                ]),
+            ),
             ui: Ui::new(device, queue),
         }
     }
@@ -102,8 +111,8 @@ impl State {
         );
 
         {
-            let compass_size = cgmath::vec2(0.5, 0.5);
-            let inner_compass_size = cgmath::vec2(0.45, 0.45);
+            let compass_size = cgmath::vec2(0.6, 0.6);
+            let inner_compass_size = cgmath::vec2(0.55, 0.55);
             let compass_position = cgmath::vec2(1.0 * aspect, 1.0) - compass_size * 0.5;
 
             self.ui.push_ellipse(
@@ -116,13 +125,13 @@ impl State {
             );
 
             #[rustfmt::skip]
-            let mut directions: [(cgmath::Vector3<f32>, cgmath::Vector3<f32>, &[u8]); _] = [
-                (cgmath::vec3( 1.0,  0.0,  0.0), cgmath::vec3(1.0, 0.0, 0.0), b"+X"),
-                (cgmath::vec3(-1.0,  0.0,  0.0), cgmath::vec3(1.0, 0.0, 0.0), b"-X"),
-                (cgmath::vec3( 0.0,  1.0,  0.0), cgmath::vec3(0.0, 0.0, 1.0), b"+Z"),
-                (cgmath::vec3( 0.0, -1.0,  0.0), cgmath::vec3(0.0, 0.0, 1.0), b"-Z"),
-                (cgmath::vec3( 0.0,  0.0,  1.0), cgmath::vec3(1.0, 0.0, 1.0), b"+W"),
-                (cgmath::vec3( 0.0,  0.0, -1.0), cgmath::vec3(1.0, 0.0, 1.0), b"-W"),
+            let mut directions: [(cgmath::Vector3<f32>, cgmath::Vector3<f32>, &str); _] = [
+                (cgmath::vec3( 1.0,  0.0,  0.0), cgmath::vec3(1.0, 0.0, 0.0), "+X"),
+                (cgmath::vec3(-1.0,  0.0,  0.0), cgmath::vec3(1.0, 0.0, 0.0), "-X"),
+                (cgmath::vec3( 0.0,  1.0,  0.0), cgmath::vec3(0.0, 0.0, 1.0), "+Z"),
+                (cgmath::vec3( 0.0, -1.0,  0.0), cgmath::vec3(0.0, 0.0, 1.0), "-Z"),
+                (cgmath::vec3( 0.0,  0.0,  1.0), cgmath::vec3(1.0, 0.0, 1.0), "+W"),
+                (cgmath::vec3( 0.0,  0.0, -1.0), cgmath::vec3(1.0, 0.0, 1.0), "-W"),
             ];
             for (direction, _, _) in &mut directions {
                 let new_direction = self
@@ -134,31 +143,34 @@ impl State {
             }
             directions.sort_by(|(a, _, _), (b, _, _)| a.z.total_cmp(&b.z));
             for (direction, color, name) in directions {
-                let end_position = compass_position
-                    + cgmath::vec2(direction.y, direction.x)
-                        .mul_element_wise(inner_compass_size * 0.5);
                 self.ui.push_line(Line {
                     a: compass_position,
-                    b: end_position,
+                    b: compass_position
+                        + cgmath::vec2(direction.y, direction.x)
+                            .mul_element_wise(inner_compass_size * 0.5),
                     color,
                     width: 0.05,
                 });
 
-                let text_size = 0.02;
-                let start =
-                    end_position - cgmath::vec2((name.len() - 1) as f32 * text_size * 0.5, 0.0);
-                for (i, &_) in name.iter().enumerate() {
-                    self.ui.push_quad(
-                        Quad {
-                            position: start + cgmath::vec2(i as f32 * text_size, 0.0),
-                            size: cgmath::vec2(text_size, text_size * 2.0),
-                            color: cgmath::vec4(0.0, 0.0, 0.0, 1.0),
-                        },
-                        None,
-                    );
-                }
+                self.space_mono.draw_str(
+                    &mut self.ui,
+                    name,
+                    compass_position
+                        + cgmath::vec2(direction.y, direction.x)
+                            .mul_element_wise(inner_compass_size * 0.45),
+                    0.1,
+                    cgmath::vec4(0.0, 0.0, 0.0, 1.0),
+                );
             }
         }
+
+        self.space_mono.draw_str(
+            &mut self.ui,
+            "Hello, world!",
+            cgmath::vec2(0.0, 0.0),
+            0.2,
+            cgmath::vec4(1.0, 0.0, 0.0, 1.0),
+        );
 
         move |render_pass: &mut wgpu::RenderPass<'_>| {
             self.ui.render(
