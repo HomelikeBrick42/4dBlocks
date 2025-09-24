@@ -111,8 +111,8 @@ impl State {
         );
 
         {
-            let compass_size = cgmath::vec2(0.6, 0.6);
-            let inner_compass_size = cgmath::vec2(0.55, 0.55);
+            let compass_size = cgmath::vec2(0.5, 0.5);
+            let inner_compass_size = cgmath::vec2(0.45, 0.45);
             let compass_position = cgmath::vec2(1.0 * aspect, 1.0) - compass_size * 0.5;
 
             self.ui.push_ellipse(
